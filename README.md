@@ -1,4 +1,4 @@
-Color Palette Showcase (Color Hunt Clone)
+Color Palette Showcase 
 A modern, full-stack web application inspired by Color Hunt, built with Next.js and MongoDB. This project allows users to discover, like, and save their favorite color palettes.
 
 
