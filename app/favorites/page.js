@@ -76,7 +76,7 @@ export default async function FavoritesPage() {
       <main className="max-w-7xl mx-auto py-8 px-4">
         <h1 className="text-4xl font-bold text-center mb-8">Your Favorites</h1>
         {favoritePalettes.length === 0 ? (
-          <p className="text-center text-gray-500">You haven't liked any palettes yet.</p>
+          <p className="text-center text-gray-500">You have not liked any palettes yet.</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {favoritePalettes.map((palette) => (
