@@ -1,34 +1,36 @@
+import { redirect } from 'next/navigation';
+import { getServerSession } from 'next-auth';
+import { ObjectId } from 'mongodb';
+
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { Header } from '@/components/Header';
 import { PaletteCard } from '@/components/PaletteCard';
 import clientPromise from '@/lib/mongodb';
-import { getServerSession } from 'next-auth';
-import { authOptions } from './api/auth/[...nextauth]/route';
 
-// Helper function to convert RGB to HEX
-function rgbToHex([r, g, b]) {
-  const toHex = (c) => ("0" + c.toString(16)).slice(-2);
-  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-}
-
-// Fetches palettes from the Colormind API
-async function fetchApiPalettes() {
-  const url = "http://colormind.io/api/";
-  const data = { model: "default" };
-  const paletteCount = 16;
-
-  const promises = Array(paletteCount).fill(null).map(() =>
-    fetch(url, { method: "POST", body: JSON.stringify(data) }).then(res => res.json())
-  );
-
+async function getFavoritePalettes(userId) {
   try {
-    const results = await Promise.all(promises);
-    return results.map(result => ({
-      id: result.result.map(rgb => rgb.join('-')).join('_'),
-      colors: result.result.map(rgbToHex),
-      _id: result.result.map(rgb => rgb.join('-')).join('_').substring(0, 12) // a mock short ID for display
-    }));
+    const client = await clientPromise;
+    const db = client.db();
+
+    const favoritePalettes = await db.collection('likes').aggregate([
+      { $match: { userId: new ObjectId(userId) } },
+      { $sort: { createdAt: -1 } },
+      { $limit: 100 },
+      {
+        $lookup: {
+          from: 'palettes',
+          localField: 'paletteId',
+          foreignField: 'id',
+          as: 'paletteDetails'
+        }
+      },
+      { $unwind: '$paletteDetails' },
+      { $replaceRoot: { newRoot: '$paletteDetails' } }
+    ]).toArray();
+
+    return favoritePalettes.map(p => ({ ...p, _id: p._id.toString() }));
   } catch (error) {
-    console.error("Failed to fetch API palettes:", error);
+    console.error("Failed to fetch favorite palettes:", error);
     return [];
   }
 }
@@ -47,7 +49,6 @@ async function getLikeData(userId) {
     const userLikes = new Set(
       userId ? likes.filter(like => like.userId.toString() === userId).map(like => like.paletteId) : []
     );
-
     return { likeCounts, userLikes };
   } catch (e) {
     console.error("Failed to fetch like data:", e);
@@ -55,24 +56,30 @@ async function getLikeData(userId) {
   }
 }
 
-export default async function HomePage() {
+export default async function FavoritesPage() {
   const session = await getServerSession(authOptions);
-  const userId = session?.user?.id || null;
 
-  const [palettes, { likeCounts, userLikes }] = await Promise.all([
-    fetchApiPalettes(),
+  if (!session?.user?.id) {
+    redirect('/');
+  }
+
+  const userId = session.user.id;
+  
+  const [favoritePalettes, { likeCounts, userLikes }] = await Promise.all([
+    getFavoritePalettes(userId),
     getLikeData(userId)
   ]);
-  
+
   return (
     <div className="bg-gray-50 min-h-screen">
       <Header />
       <main className="max-w-7xl mx-auto py-8 px-4">
-        {palettes.length === 0 ? (
-          <p className="text-center text-gray-500">Could not fetch palettes. Please try again later.</p>
+        <h1 className="text-4xl font-bold text-center mb-8">Your Favorites</h1>
+        {favoritePalettes.length === 0 ? (
+          <p className="text-center text-gray-500">You haven't liked any palettes yet.</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {palettes.map((palette) => (
+            {favoritePalettes.map((palette) => (
               <PaletteCard
                 key={palette.id}
                 palette={palette}
